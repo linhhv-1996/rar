@@ -23,7 +23,7 @@ public class RarPlugin: NSObject, FlutterPlugin {
       result(FlutterMethodNotImplemented)
     }
   }
-  
+
   private func extractRarFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let rarFilePath = args["rarFilePath"] as? String,
@@ -43,18 +43,27 @@ public class RarPlugin: NSObject, FlutterPlugin {
       return
     }
     
-    // Extract the RAR file
-    do {
-      let archive = try URKArchive(path: rarFilePath)
-      
-      if let password = password {
-        archive.password = password
+    // 👉 ĐẨY TÁC VỤ SANG BACKGROUND THREAD
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let archive = try URKArchive(path: rarFilePath)
+        
+        if let password = password {
+          archive.password = password
+        }
+        
+        // Chạy ngầm tẹt ga, không block UI
+        try archive.extractFiles(to: destinationPath, overwrite: true)
+        
+        // 👉 TRẢ KẾT QUẢ VỀ MAIN THREAD
+        DispatchQueue.main.async {
+          result(["success": true, "message": "Extraction completed successfully"])
+        }
+      } catch {
+        DispatchQueue.main.async {
+          result(["success": false, "message": "Extraction failed: \(error.localizedDescription)"])
+        }
       }
-      
-      try archive.extractFiles(to: destinationPath, overwrite: true)
-      result(["success": true, "message": "Extraction completed successfully"])
-    } catch {
-      result(["success": false, "message": "Extraction failed: \(error.localizedDescription)"])
     }
   }
   
@@ -67,17 +76,27 @@ public class RarPlugin: NSObject, FlutterPlugin {
     
     let password = args["password"] as? String
     
-    do {
-      let archive = try URKArchive(path: rarFilePath)
-      
-      if let password = password {
-        archive.password = password
+    // 👉 ĐẨY TÁC VỤ SANG BACKGROUND THREAD
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let archive = try URKArchive(path: rarFilePath)
+        
+        if let password = password {
+          archive.password = password
+        }
+        
+        // Chạy ngầm việc đọc file
+        let fileNames = try archive.listFilenames()
+        
+        // 👉 TRẢ KẾT QUẢ VỀ MAIN THREAD
+        DispatchQueue.main.async {
+          result(["success": true, "message": "Successfully listed RAR contents", "files": fileNames])
+        }
+      } catch {
+        DispatchQueue.main.async {
+          result(["success": false, "message": "Failed to list RAR contents: \(error.localizedDescription)", "files": []])
+        }
       }
-      
-      let fileNames = try archive.listFilenames()
-      result(["success": true, "message": "Successfully listed RAR contents", "files": fileNames])
-    } catch {
-      result(["success": false, "message": "Failed to list RAR contents: \(error.localizedDescription)", "files": []])
     }
   }
 }
